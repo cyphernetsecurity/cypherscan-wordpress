@@ -4,23 +4,54 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+function cypherscan_option($key, $default = null)
+{
+    $value = get_option($key, null);
+
+    if ($value === null || $value === '') {
+        return $default;
+    }
+
+    return $value;
+}
+
+function cypherscan_debug_enabled()
+{
+    return cypherscan_option('cypherscan_debug_logs', '1') === '1';
+}
+
+function cypherscan_log($message)
+{
+    if (!cypherscan_debug_enabled()) {
+        return;
+    }
+
+    error_log('[cypherscan-wordpress] ' . $message);
+}
+
+function cypherscan_fail_upload($upload, $message, $fail_open = true)
+{
+    cypherscan_log($message);
+
+    if ($fail_open) {
+        return $upload;
+    }
+
+    $upload['error'] = 'CypherScan could not verify this upload. Please try again later.';
+    return $upload;
+}
+
 add_filter('wp_handle_upload', function ($upload) {
-    error_log('[cypherscan-wordpress] upload detected');
+    cypherscan_log('upload detected');
 
     if (!isset($upload['file']) || !file_exists($upload['file'])) {
-        error_log('[cypherscan-wordpress] file missing');
-        return $upload;
+        return cypherscan_fail_upload($upload, 'file missing', true);
     }
 
-    $api_key = get_option('cypherscan_api_key', '');
-
-    if (empty($api_key) && defined('CYPHERSCAN_API_KEY')) {
-        $api_key = CYPHERSCAN_API_KEY;
-    }
+    $api_key = cypherscan_option('cypherscan_api_key', '');
 
     if (empty($api_key)) {
-        error_log('[cypherscan-wordpress] missing API key');
-        return $upload;
+        return cypherscan_fail_upload($upload, 'missing API key', true);
     }
 
     $file_path = $upload['file'];
@@ -28,30 +59,29 @@ add_filter('wp_handle_upload', function ($upload) {
     $content_type = isset($upload['type']) ? $upload['type'] : 'application/octet-stream';
     $size_bytes = filesize($file_path);
 
-    $base_url = get_option('cypherscan_api_base_url', '');
+    $base_url = rtrim(
+        cypherscan_option('cypherscan_api_base_url', 'https://cyphernetsecurity.com'),
+        '/'
+    );
 
-    if (empty($base_url) && defined('CYPHERSCAN_API_BASE_URL')) {
-        $base_url = CYPHERSCAN_API_BASE_URL;
+    $block_infected = cypherscan_option('cypherscan_block_infected', '1') === '1';
+    $fail_open = cypherscan_option('cypherscan_fail_open', '1') === '1';
+
+    $timeout = (int) cypherscan_option('cypherscan_timeout_seconds', 30);
+
+    if ($timeout < 5) {
+        $timeout = 5;
     }
 
-    if (empty($base_url)) {
-        $base_url = 'https://cyphernetsecurity.com';
+    if ($timeout > 120) {
+        $timeout = 120;
     }
 
-    $base_url = rtrim($base_url, '/');
-
-    $block_infected_option = get_option('cypherscan_block_infected', '1');
-    $block_infected = $block_infected_option === '1';
-
-    if (defined('CYPHERSCAN_BLOCK_INFECTED')) {
-        $block_infected = (bool) CYPHERSCAN_BLOCK_INFECTED;
-    }
-
-    error_log('[cypherscan-wordpress] scanning: ' . $file_name);
-    error_log('[cypherscan-wordpress] size: ' . $size_bytes);
+    cypherscan_log('scanning: ' . $file_name);
+    cypherscan_log('size: ' . $size_bytes);
 
     $presign_response = wp_remote_post($base_url . '/api/v1/upload/presign', [
-        'timeout' => 20,
+        'timeout' => $timeout,
         'headers' => [
             'Authorization' => 'Bearer ' . $api_key,
             'Content-Type' => 'application/json',
@@ -64,37 +94,41 @@ add_filter('wp_handle_upload', function ($upload) {
     ]);
 
     if (is_wp_error($presign_response)) {
-        error_log('[cypherscan-wordpress] presign failed: ' . $presign_response->get_error_message());
-        return $upload;
+        return cypherscan_fail_upload(
+            $upload,
+            'presign failed: ' . $presign_response->get_error_message(),
+            $fail_open
+        );
     }
 
     $presign_status = wp_remote_retrieve_response_code($presign_response);
     $presign_body = wp_remote_retrieve_body($presign_response);
 
-    error_log('[cypherscan-wordpress] presign status: ' . $presign_status);
+    cypherscan_log('presign status: ' . $presign_status);
 
     if ($presign_status < 200 || $presign_status >= 300) {
-        error_log('[cypherscan-wordpress] presign response: ' . $presign_body);
-        return $upload;
+        return cypherscan_fail_upload(
+            $upload,
+            'presign response: ' . $presign_body,
+            $fail_open
+        );
     }
 
     $presign_data = json_decode($presign_body, true);
 
     if (!is_array($presign_data) || empty($presign_data['url']) || empty($presign_data['key'])) {
-        error_log('[cypherscan-wordpress] invalid presign response');
-        return $upload;
+        return cypherscan_fail_upload($upload, 'invalid presign response', $fail_open);
     }
 
     $file_contents = file_get_contents($file_path);
 
     if ($file_contents === false) {
-        error_log('[cypherscan-wordpress] failed to read file');
-        return $upload;
+        return cypherscan_fail_upload($upload, 'failed to read file', $fail_open);
     }
 
     $s3_response = wp_remote_request($presign_data['url'], [
         'method' => 'PUT',
-        'timeout' => 30,
+        'timeout' => $timeout,
         'headers' => [
             'Content-Type' => $content_type,
         ],
@@ -102,20 +136,22 @@ add_filter('wp_handle_upload', function ($upload) {
     ]);
 
     if (is_wp_error($s3_response)) {
-        error_log('[cypherscan-wordpress] s3 upload failed: ' . $s3_response->get_error_message());
-        return $upload;
+        return cypherscan_fail_upload(
+            $upload,
+            's3 upload failed: ' . $s3_response->get_error_message(),
+            $fail_open
+        );
     }
 
     $s3_status = wp_remote_retrieve_response_code($s3_response);
-    error_log('[cypherscan-wordpress] s3 upload status: ' . $s3_status);
+    cypherscan_log('s3 upload status: ' . $s3_status);
 
     if ($s3_status < 200 || $s3_status >= 300) {
-        error_log('[cypherscan-wordpress] s3 upload failed');
-        return $upload;
+        return cypherscan_fail_upload($upload, 's3 upload failed', $fail_open);
     }
 
     $scan_response = wp_remote_post($base_url . '/api/v1/scan', [
-        'timeout' => 30,
+        'timeout' => $timeout,
         'headers' => [
             'Authorization' => 'Bearer ' . $api_key,
             'Content-Type' => 'application/json',
@@ -126,38 +162,52 @@ add_filter('wp_handle_upload', function ($upload) {
     ]);
 
     if (is_wp_error($scan_response)) {
-        error_log('[cypherscan-wordpress] scan failed: ' . $scan_response->get_error_message());
-        return $upload;
+        return cypherscan_fail_upload(
+            $upload,
+            'scan failed: ' . $scan_response->get_error_message(),
+            $fail_open
+        );
     }
 
     $scan_status = wp_remote_retrieve_response_code($scan_response);
     $scan_body = wp_remote_retrieve_body($scan_response);
 
-    error_log('[cypherscan-wordpress] scan status: ' . $scan_status);
+    cypherscan_log('scan status: ' . $scan_status);
 
     if ($scan_status < 200 || $scan_status >= 300) {
-        error_log('[cypherscan-wordpress] scan response: ' . $scan_body);
-        return $upload;
+        return cypherscan_fail_upload(
+            $upload,
+            'scan response: ' . $scan_body,
+            $fail_open
+        );
     }
 
     $scan_data = json_decode($scan_body, true);
 
     if (!is_array($scan_data)) {
-        error_log('[cypherscan-wordpress] invalid scan response');
-        return $upload;
+        return cypherscan_fail_upload($upload, 'invalid scan response', $fail_open);
     }
 
     $verdict = isset($scan_data['verdict']) ? $scan_data['verdict'] : 'unknown';
     $blocked = !empty($scan_data['blocked']);
     $scan_id = isset($scan_data['scanId']) ? $scan_data['scanId'] : 'unknown';
 
-    error_log('[cypherscan-wordpress] result: ' . $file_name . ' verdict=' . $verdict . ' blocked=' . ($blocked ? 'true' : 'false') . ' scanId=' . $scan_id);
+    cypherscan_log(
+        'result: ' .
+        $file_name .
+        ' verdict=' .
+        $verdict .
+        ' blocked=' .
+        ($blocked ? 'true' : 'false') .
+        ' scanId=' .
+        $scan_id
+    );
 
     if ($block_infected && $blocked) {
         @unlink($file_path);
 
         $upload['error'] = 'CypherScan blocked this upload. Verdict: ' . $verdict;
-        error_log('[cypherscan-wordpress] blocked file removed: ' . $file_name);
+        cypherscan_log('blocked file removed: ' . $file_name);
     }
 
     return $upload;

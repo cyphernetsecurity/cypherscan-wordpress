@@ -18,6 +18,9 @@ add_action('admin_init', function () {
     register_setting('cypherscan_settings', 'cypherscan_api_key');
     register_setting('cypherscan_settings', 'cypherscan_api_base_url');
     register_setting('cypherscan_settings', 'cypherscan_block_infected');
+    register_setting('cypherscan_settings', 'cypherscan_fail_open');
+    register_setting('cypherscan_settings', 'cypherscan_timeout_seconds');
+    register_setting('cypherscan_settings', 'cypherscan_debug_logs');
 
     add_settings_section(
         'cypherscan_main_section',
@@ -58,7 +61,47 @@ add_action('admin_init', function () {
             $value = get_option('cypherscan_block_infected', '1');
             echo '<label>';
             echo '<input type="checkbox" name="cypherscan_block_infected" value="1" ' . checked('1', $value, false) . ' />';
-            echo ' Remove blocked files automatically';
+            echo ' Remove blocked files automatically when CypherScan returns blocked=true.';
+            echo '</label>';
+        },
+        'cypherscan-wordpress',
+        'cypherscan_main_section'
+    );
+
+    add_settings_field(
+        'cypherscan_fail_open',
+        'Fail open',
+        function () {
+            $value = get_option('cypherscan_fail_open', '1');
+            echo '<label>';
+            echo '<input type="checkbox" name="cypherscan_fail_open" value="1" ' . checked('1', $value, false) . ' />';
+            echo ' Allow uploads if CypherScan is temporarily unavailable.';
+            echo '</label>';
+        },
+        'cypherscan-wordpress',
+        'cypherscan_main_section'
+    );
+
+    add_settings_field(
+        'cypherscan_timeout_seconds',
+        'Timeout seconds',
+        function () {
+            $value = esc_attr(get_option('cypherscan_timeout_seconds', '30'));
+            echo '<input type="number" min="5" max="120" name="cypherscan_timeout_seconds" value="' . $value . '" class="small-text" />';
+            echo '<p class="description">Network timeout for CypherScan requests. Default: 30 seconds.</p>';
+        },
+        'cypherscan-wordpress',
+        'cypherscan_main_section'
+    );
+
+    add_settings_field(
+        'cypherscan_debug_logs',
+        'Debug logs',
+        function () {
+            $value = get_option('cypherscan_debug_logs', '1');
+            echo '<label>';
+            echo '<input type="checkbox" name="cypherscan_debug_logs" value="1" ' . checked('1', $value, false) . ' />';
+            echo ' Write CypherScan debug messages to the PHP error log.';
             echo '</label>';
         },
         'cypherscan-wordpress',
