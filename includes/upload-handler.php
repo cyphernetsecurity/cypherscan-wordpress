@@ -12,8 +12,14 @@ add_filter('wp_handle_upload', function ($upload) {
         return $upload;
     }
 
-    if (!defined('CYPHERSCAN_API_KEY') || empty(CYPHERSCAN_API_KEY)) {
-        error_log('[cypherscan-wordpress] missing CYPHERSCAN_API_KEY');
+    $api_key = get_option('cypherscan_api_key', '');
+
+    if (empty($api_key) && defined('CYPHERSCAN_API_KEY')) {
+        $api_key = CYPHERSCAN_API_KEY;
+    }
+
+    if (empty($api_key)) {
+        error_log('[cypherscan-wordpress] missing API key');
         return $upload;
     }
 
@@ -22,13 +28,24 @@ add_filter('wp_handle_upload', function ($upload) {
     $content_type = isset($upload['type']) ? $upload['type'] : 'application/octet-stream';
     $size_bytes = filesize($file_path);
 
-    $base_url = defined('CYPHERSCAN_API_BASE_URL')
-        ? rtrim(CYPHERSCAN_API_BASE_URL, '/')
-        : 'https://cyphernetsecurity.com';
+    $base_url = get_option('cypherscan_api_base_url', '');
 
-    $block_infected = defined('CYPHERSCAN_BLOCK_INFECTED')
-        ? (bool) CYPHERSCAN_BLOCK_INFECTED
-        : true;
+    if (empty($base_url) && defined('CYPHERSCAN_API_BASE_URL')) {
+        $base_url = CYPHERSCAN_API_BASE_URL;
+    }
+
+    if (empty($base_url)) {
+        $base_url = 'https://cyphernetsecurity.com';
+    }
+
+    $base_url = rtrim($base_url, '/');
+
+    $block_infected_option = get_option('cypherscan_block_infected', '1');
+    $block_infected = $block_infected_option === '1';
+
+    if (defined('CYPHERSCAN_BLOCK_INFECTED')) {
+        $block_infected = (bool) CYPHERSCAN_BLOCK_INFECTED;
+    }
 
     error_log('[cypherscan-wordpress] scanning: ' . $file_name);
     error_log('[cypherscan-wordpress] size: ' . $size_bytes);
@@ -36,7 +53,7 @@ add_filter('wp_handle_upload', function ($upload) {
     $presign_response = wp_remote_post($base_url . '/api/v1/upload/presign', [
         'timeout' => 20,
         'headers' => [
-            'Authorization' => 'Bearer ' . CYPHERSCAN_API_KEY,
+            'Authorization' => 'Bearer ' . $api_key,
             'Content-Type' => 'application/json',
         ],
         'body' => wp_json_encode([
@@ -100,7 +117,7 @@ add_filter('wp_handle_upload', function ($upload) {
     $scan_response = wp_remote_post($base_url . '/api/v1/scan', [
         'timeout' => 30,
         'headers' => [
-            'Authorization' => 'Bearer ' . CYPHERSCAN_API_KEY,
+            'Authorization' => 'Bearer ' . $api_key,
             'Content-Type' => 'application/json',
         ],
         'body' => wp_json_encode([
