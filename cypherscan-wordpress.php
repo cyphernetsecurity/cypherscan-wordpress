@@ -3,7 +3,7 @@
  * Plugin Name: CypherScan WordPress
  * Plugin URI: https://cyphernetsecurity.com
  * Description: Scan uploaded files with CypherScan before they enter WordPress workflows.
- * Version: 0.1.0
+ * Version: 1.0.0
  * Author: CypherNet Security
  * Author URI: https://cyphernetsecurity.com
  * License: MIT
