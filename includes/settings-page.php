@@ -59,6 +59,7 @@ add_action('admin_init', function () {
         'Block infected uploads',
         function () {
             $value = get_option('cypherscan_block_infected', '1');
+            echo '<input type="hidden" name="cypherscan_block_infected" value="0" />';
             echo '<label>';
             echo '<input type="checkbox" name="cypherscan_block_infected" value="1" ' . checked('1', $value, false) . ' />';
             echo ' Remove blocked files automatically when CypherScan returns blocked=true.';
@@ -73,6 +74,7 @@ add_action('admin_init', function () {
         'Fail open',
         function () {
             $value = get_option('cypherscan_fail_open', '1');
+            echo '<input type="hidden" name="cypherscan_fail_open" value="0" />';
             echo '<label>';
             echo '<input type="checkbox" name="cypherscan_fail_open" value="1" ' . checked('1', $value, false) . ' />';
             echo ' Allow uploads if CypherScan is temporarily unavailable.';
@@ -99,6 +101,7 @@ add_action('admin_init', function () {
         'Debug logs',
         function () {
             $value = get_option('cypherscan_debug_logs', '1');
+            echo '<input type="hidden" name="cypherscan_debug_logs" value="0" />';
             echo '<label>';
             echo '<input type="checkbox" name="cypherscan_debug_logs" value="1" ' . checked('1', $value, false) . ' />';
             echo ' Write CypherScan debug messages to the PHP error log.';
