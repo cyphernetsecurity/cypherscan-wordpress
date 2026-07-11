@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ---
 
+## [1.0.1] - 2026-07-11
+
+### Added
+
+- WordPress.org `readme.txt`
+- Official WordPress.org plugin metadata
+
+### Changed
+
+- Updated plugin version to 1.0.1
+- Improved documentation
+- Prepared the first public GitHub release
+
+---
+
 ## [1.0.0] - 2026-06-26
 
 ### Added
