@@ -1,20 +1,21 @@
 # CypherScan for WordPress
 
-Protect WordPress uploads with CypherScan before files enter your production workflows.
+Protect WordPress uploads before they reach production.
 
-CypherScan scans every uploaded file through the CypherScan API and can automatically block malicious content before it becomes available inside WordPress.
+CypherScan securely scans every uploaded file using a presigned upload workflow and can automatically block suspicious or malicious files before they become available inside WordPress.
 
 ---
 
 ## Features
 
-- Upload scanning
+- Secure presigned upload workflow
 - Malware detection
-- Automatic file blocking
+- Secret detection
+- Automatic malicious file blocking
+- Configurable fail-open / fail-closed behavior
 - API key management
 - Connection testing
-- Configurable timeout
-- Fail-open mode
+- Configurable request timeout
 - Debug logging
 - Native WordPress Settings page
 
@@ -34,23 +35,23 @@ CypherScan scans every uploaded file through the CypherScan API and can automati
 
 2. Copy the plugin into:
 
-```
+```text
 wp-content/plugins/cypherscan-wordpress
 ```
 
 3. Activate the plugin from:
 
-```
+```text
 Plugins → CypherScan WordPress
 ```
 
 4. Open:
 
-```
+```text
 Settings → CypherScan
 ```
 
-5. Enter your:
+5. Configure:
 
 - API Key
 - API Base URL
@@ -68,25 +69,38 @@ The plugin supports:
 - API Key
 - API Base URL
 - Block infected uploads
-- Fail Open
-- Timeout
+- Fail Open / Fail Closed
+- Request timeout
 - Debug logging
 
 ---
 
-## Upload Flow
+## How it works
 
-```
+When a file is uploaded:
+
+1. The plugin requests a presigned upload URL from the CypherScan API.
+2. The file is uploaded securely to temporary object storage.
+3. CypherScan scans the uploaded object.
+4. A scan verdict is returned.
+5. Clean files remain available.
+6. Suspicious or malicious files are automatically removed.
+
+---
+
+## Architecture
+
+```text
 User Upload
       │
       ▼
 WordPress Upload Hook
       │
       ▼
-CypherScan API
+Request Presigned Upload URL
       │
       ▼
-Presigned Upload
+Temporary Secure Upload
       │
       ▼
 CypherScan Scan
@@ -94,29 +108,60 @@ CypherScan Scan
       ▼
 Verdict
       │
-      ├── Clean → Allow upload
-      └── Blocked → Remove upload
+      ├── Clean ─────► Upload allowed
+      │
+      └── Blocked ───► Upload removed
 ```
 
 ---
 
 ## Example
 
-```
+```text
 Upload detected
 
-↓
+        │
+
+        ▼
+
+Presigned Upload
+
+        │
+
+        ▼
 
 CypherScan Scan
 
-↓
+        │
+
+        ▼
 
 Verdict: Clean
 
-↓
+        │
+
+        ▼
 
 File available inside WordPress
 ```
+
+---
+
+## Fail Open / Fail Closed
+
+CypherScan supports two operating modes.
+
+### Fail Open
+
+Uploads continue if the scanning service is temporarily unavailable.
+
+Recommended for development environments.
+
+### Fail Closed
+
+Uploads are rejected when the scan cannot be completed.
+
+Recommended for production environments requiring strict upload enforcement.
 
 ---
 
@@ -124,18 +169,24 @@ File available inside WordPress
 
 - Scan history
 - Media Library verdict badges
-- Scan details
+- Detailed scan reports
 - Quarantine support
-- WordPress.org release
 
 ---
 
 ## License
 
-MIT
+MIT License
+
+Copyright (c) 2026 CypherNet Security Inc.
+
+See the LICENSE file for details.
 
 ---
 
-Built by CypherNet Security
+## Links
 
-https://cyphernetsecurity.com
+- Website: https://cyphernetsecurity.com
+- GitHub: https://github.com/cyphernetsecurity
+
+Built by CypherNet Security Inc.
