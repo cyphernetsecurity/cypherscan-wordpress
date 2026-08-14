@@ -26,7 +26,7 @@ add_action('admin_init', function () {
         'cypherscan_main_section',
         'CypherScan API Settings',
         function () {
-            echo '<p>Configure CypherScan upload scanning for WordPress media uploads.</p>';
+            echo '<p>Configure CypherScan upload scanning for WordPress media uploads. If your CypherScan Agent subscription is active, completed upload scans are also reported to the Agent automatically.</p>';
         },
         'cypherscan-wordpress'
     );
