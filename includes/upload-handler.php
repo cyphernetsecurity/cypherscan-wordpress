@@ -41,6 +41,53 @@ function cypherscan_fail_upload($upload, $message, $fail_open = true)
     return $upload;
 }
 
+function cypherscan_report_agent_upload_event(
+    $base_url,
+    $api_key,
+    $timeout,
+    $scan_id,
+    $file_name,
+    $content_type,
+    $size_bytes,
+    $verdict,
+    $blocked
+) {
+    if (empty($scan_id) || $scan_id === 'unknown') {
+        return;
+    }
+
+    $site_url = home_url('/');
+
+    $response = wp_remote_post($base_url . '/api/v1/agent/wordpress/event', [
+        'timeout' => min(5, max(1, $timeout)),
+        'blocking' => false,
+        'headers' => [
+            'Authorization' => 'Bearer ' . $api_key,
+            'Content-Type' => 'application/json',
+        ],
+        'body' => wp_json_encode([
+            'eventType' => 'UPLOAD_SCAN',
+            'siteUrl' => $site_url,
+            'scanId' => $scan_id,
+            'fileName' => $file_name,
+            'contentType' => $content_type,
+            'sizeBytes' => $size_bytes,
+            'verdict' => $verdict,
+            'blocked' => (bool) $blocked,
+            'pluginVersion' => defined('CYPHERSCAN_WORDPRESS_VERSION')
+                ? CYPHERSCAN_WORDPRESS_VERSION
+                : 'unknown',
+        ]),
+    ]);
+
+    if (is_wp_error($response)) {
+        cypherscan_log('agent event dispatch failed: ' . $response->get_error_message());
+        return;
+    }
+
+    cypherscan_log('agent event queued for scanId=' . $scan_id);
+}
+
 add_filter('wp_handle_upload', function ($upload) {
     cypherscan_log('upload detected');
 
@@ -201,6 +248,20 @@ add_filter('wp_handle_upload', function ($upload) {
         ($blocked ? 'true' : 'false') .
         ' scanId=' .
         $scan_id
+    );
+
+    // Agent reporting is best-effort and intentionally cannot change the
+    // upload allow/block decision. The API validates the real ScanLog by scanId.
+    cypherscan_report_agent_upload_event(
+        $base_url,
+        $api_key,
+        $timeout,
+        $scan_id,
+        $file_name,
+        $content_type,
+        $size_bytes,
+        $verdict,
+        $blocked
     );
 
     if ($block_infected && $blocked) {

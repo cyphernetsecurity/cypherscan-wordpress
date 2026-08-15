@@ -26,7 +26,7 @@ add_action('admin_init', function () {
         'cypherscan_main_section',
         'CypherScan API Settings',
         function () {
-            echo '<p>Configure CypherScan upload scanning for WordPress media uploads.</p>';
+            echo '<p>Configure CypherScan upload scanning for WordPress media uploads. If your CypherScan Agent subscription is active, completed upload scans are also reported to the Agent automatically.</p>';
         },
         'cypherscan-wordpress'
     );
@@ -165,7 +165,6 @@ add_action('wp_ajax_cypherscan_test_connection', function () {
     if ($status >= 200 && $status < 300 && is_array($data) && !empty($data['ok'])) {
         wp_send_json_success([
             'message' => 'Connected to CypherScan.',
-            'plan' => isset($data['plan']) ? $data['plan'] : null,
             'traceId' => isset($data['traceId']) ? $data['traceId'] : null,
         ]);
     }
@@ -234,8 +233,7 @@ function cypherscan_render_settings_page()
                 const data = await response.json();
 
                 if (data.success) {
-                    const plan = data.data && data.data.plan ? " Plan: " + data.data.plan + "." : "";
-                    result.textContent = "✓ " + data.data.message + plan;
+                    result.textContent = "✓ " + data.data.message;
                     result.style.color = "#008000";
                 } else {
                     const message = data.data && data.data.message ? data.data.message : "Connection failed.";
